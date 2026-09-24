@@ -1,0 +1,33 @@
+{
+  "manifest_version": 1,
+  "version": "1.2.0",
+  "type": "APP",
+  "name": {
+    "en": "Lookup Support",
+    "ja": "ルックアップサポート"
+  },
+  "description": {
+    "en": "Highlights lookup fields and their copy destinations in the same color, and fetches lookups automatically on the create/edit screens.",
+    "ja": "ルックアップフィールドとコピー先を同じ色で見やすく表示し、追加・編集画面でルックアップを自動取得する無料プラグインです。"
+  },
+  "icon": "image/icon.png",
+  "desktop": {
+    "js": [
+      "js/desktop.js"
+    ]
+  },
+  "mobile": {
+    "js": [
+      "js/desktop.js"
+    ]
+  },
+  "config": {
+    "html": "config.html",
+    "js": [
+      "js/config.js"
+    ],
+    "css": [
+      "css/51-modern-default.css"
+    ]
+  }
+}

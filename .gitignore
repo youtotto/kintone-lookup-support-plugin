@@ -1,0 +1,11 @@
+node_modules/
+build/
+dist/
+release/
+*.ppk
+*.zip
+*.key
+.env
+.vscode/
+.DS_Store
+_removed_from_source/

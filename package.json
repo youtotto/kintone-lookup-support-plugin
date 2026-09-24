@@ -1,0 +1,13 @@
+{
+  "name": "kintone-lookup-support-plugin",
+  "private": true,
+  "description": "Lookup Support - free kintone plugin: color markers for lookup fields and automatic lookup fetch (build: esbuild, test: node:test + jsdom)",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "test": "npm run build && node --test \"test/**/*.test.js\""
+  },
+  "devDependencies": {
+    "esbuild": "0.25.5",
+    "jsdom": "29.1.1"
+  }
+}
