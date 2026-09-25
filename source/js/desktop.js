@@ -253,7 +253,7 @@
         if (typeof value === "object") return Object.keys(value).length === 0;
         return false;
       }
-      function decideFetch({ item, record, properties, screen }) {
+      function decideBase({ item, record, properties, screen }) {
         const auto = item && item.autoFetch;
         if (!auto || auto.enabled !== true) return { fetch: false, reason: "disabled" };
         if (item.subtableCode) return { fetch: false, reason: "subtable" };
@@ -276,18 +276,29 @@
           }
         }
       }
-      function applyAutoFetch2({ record, config, properties, screen }) {
+      function decideFetch({ item, record, properties, screen, predicate }) {
+        const base = decideBase({ item, record, properties, screen });
+        if (!base.fetch || typeof predicate !== "function") return base;
+        let ok = false;
+        try {
+          ok = predicate({ item, record, properties, screen });
+        } catch (error) {
+          return { fetch: false, reason: "predicate-error", error };
+        }
+        return ok ? base : { fetch: false, reason: "predicate-false" };
+      }
+      function applyAutoFetch2({ record, config, properties, screen, predicate }) {
         const fetched = [];
         if (!record || !config || !Array.isArray(config.items)) return fetched;
         config.items.forEach((item) => {
-          const decision = decideFetch({ item, record, properties, screen });
+          const decision = decideFetch({ item, record, properties, screen, predicate });
           if (!decision.fetch) return;
           record[item.lookupFieldCode].lookup = true;
           fetched.push(item.lookupFieldCode);
         });
         return fetched;
       }
-      module.exports = { isEmptyValue, decideFetch, applyAutoFetch: applyAutoFetch2 };
+      module.exports = { isEmptyValue, decideBase, decideFetch, applyAutoFetch: applyAutoFetch2 };
     }
   });
 

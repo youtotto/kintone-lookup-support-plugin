@@ -4,6 +4,14 @@
  * 設定画面（1 ルックアップ = 1 カード）。無料版・＋ 共通の土台。
  * 無料版は marker / autoFetch の段だけを DOM に出す。＋専用ノードは DOM に出さず、保存時もそのまま保持する。
  * innerHTML は使わない（ユーザー値はすべて textContent）。
+ *
+ * 拡張点（renderConfigUi のオプション。未指定なら無料版 v1.2.0 と同じ動作）:
+ *   extensions          : [{ buildSection(doc, { lookup, item, readOnly, properties, config }) => Element|null,
+ *                            collect(card, edit, { lookup }) => void }]
+ *                         各カードの autoFetch 段の後ろに段を足し、保存時に edit へ自分のノードを書き足す
+ *   transformBeforeSave : (next, edits) => config   applyEdits 後・serialize 前に config を差し替える
+ *   showUpsell          : false で＋案内を出さない
+ *   edition             : serialize の meta.edition（既定は constants.EDITION）
  */
 const C = require('./constants');
 const P = require('./plusLink');
@@ -77,8 +85,8 @@ function buildModeSelect(doc, value) {
   return select;
 }
 
-/** 通常カード（フォームに存在するルックアップ） */
-function buildCard(doc, lookup, item, readOnly) {
+/** 通常カード（フォームに存在するルックアップ）。ctx は拡張段に渡す情報 */
+function buildCard(doc, lookup, item, readOnly, ctx = {}) {
   const card = el(doc, 'div', 'ls-card');
   card.dataset.code = lookup.code;
   card.appendChild(el(doc, 'div', 'ls-card-title', `${lookup.label}（${lookup.code}）`));
@@ -122,7 +130,13 @@ function buildCard(doc, lookup, item, readOnly) {
   fetch.appendChild(warning);
   card.appendChild(fetch);
 
-  if (readOnly) Array.from(card.querySelectorAll('input, select')).forEach((n) => { n.disabled = true; });
+  (Array.isArray(ctx.extensions) ? ctx.extensions : []).forEach((ext) => {
+    if (!ext || typeof ext.buildSection !== 'function') return;
+    const section = ext.buildSection(doc, { lookup, item, readOnly, properties: ctx.properties || null, config: ctx.config || null });
+    if (section) card.appendChild(section);
+  });
+
+  if (readOnly) Array.from(card.querySelectorAll('input, select, button')).forEach((n) => { n.disabled = true; });
   return card;
 }
 
@@ -140,14 +154,19 @@ function buildOrphanCard(doc, item, readOnly, onDelete) {
   return card;
 }
 
-/** カードから編集内容を集める */
-function collectEdits(root) {
-  return Array.from(root.querySelectorAll('.ls-card:not(.ls-card-orphan)')).map((card) => ({
-    lookupFieldCode: card.dataset.code,
-    subtableCode: null,
-    marker: { enabled: card.querySelector('.ls-marker-enabled').checked, color: card.querySelector('.ls-color').value },
-    autoFetch: { enabled: card.querySelector('.ls-fetch-enabled').checked, mode: card.querySelector('.ls-mode').value }
-  }));
+/** カードから編集内容を集める。extensions があれば各拡張の collect(card, edit, { lookup }) で edit に書き足す */
+function collectEdits(root, extensions = [], lookups = []) {
+  return Array.from(root.querySelectorAll('.ls-card:not(.ls-card-orphan)')).map((card) => {
+    const edit = {
+      lookupFieldCode: card.dataset.code,
+      subtableCode: null,
+      marker: { enabled: card.querySelector('.ls-marker-enabled').checked, color: card.querySelector('.ls-color').value },
+      autoFetch: { enabled: card.querySelector('.ls-fetch-enabled').checked, mode: card.querySelector('.ls-mode').value }
+    };
+    const lookup = lookups.find((l) => l.code === card.dataset.code) || null;
+    (Array.isArray(extensions) ? extensions : []).forEach((ext) => { if (ext && typeof ext.collect === 'function') ext.collect(card, edit, { lookup }); });
+    return edit;
+  });
 }
 
 /**
@@ -160,8 +179,12 @@ function collectEdits(root) {
  * @param {string|number} p.appId
  * @param {string} p.pathname
  * @param {(url: string) => void} p.navigate
+ * @param {Array} [p.extensions]                 カード拡張（ファイル先頭のコメント参照）
+ * @param {(next, edits) => object} [p.transformBeforeSave]
+ * @param {boolean} [p.showUpsell]               false で＋案内を出さない
+ * @param {string} [p.edition]                   meta.edition に書く値
  */
-function renderConfigUi({ document: doc, loaded, properties, setConfig, appId, pathname, navigate, now }) {
+function renderConfigUi({ document: doc, loaded, properties, setConfig, appId, pathname, navigate, now, extensions, transformBeforeSave, showUpsell, edition }) {
   const root = doc.querySelector('.ls-config');
   const notices = root.querySelector('#ls-notices');
   const cards = root.querySelector('#ls-cards');
@@ -200,7 +223,7 @@ function renderConfigUi({ document: doc, loaded, properties, setConfig, appId, p
   if (properties) {
     lookups.top.forEach((lookup) => {
       const item = S.findItem(config, lookup.code) || S.defaultItem(lookup.code);
-      cards.appendChild(buildCard(doc, lookup, S.normalizeItem(item), readOnly));
+      cards.appendChild(buildCard(doc, lookup, S.normalizeItem(item), readOnly, { extensions, properties, config }));
     });
     const formCodes = new Set(lookups.top.map((l) => l.code));
     (config.items || []).filter((it) => it && it.lookupFieldCode && !it.subtableCode && !formCodes.has(it.lookupFieldCode)).forEach((it) => {
@@ -210,15 +233,17 @@ function renderConfigUi({ document: doc, loaded, properties, setConfig, appId, p
     if (lookups.subtable.length) subtableNotice.appendChild(el(doc, 'p', 'ls-subtable-notice', P.SUBTABLE_NOTICE(lookups.subtable.length)));
   }
 
-  upsell.appendChild(buildUpsell(doc));
+  if (showUpsell !== false) upsell.appendChild(buildUpsell(doc));
 
   saveBtn.disabled = readOnly;
   saveBtn.onclick = () => {
     if (readOnly) return;
-    let next = S.applyEdits(config, collectEdits(root));
+    const edits = collectEdits(root, extensions, lookups.top);
+    let next = S.applyEdits(config, edits);
     deleted.forEach((code) => { next = S.removeItem(next, code); });
     if (showPlusNotice) next.meta.noticedPlusAlways = true;
-    const payload = S.serialize(next, { properties, edition: C.EDITION, now: now || new Date() });
+    if (typeof transformBeforeSave === 'function') next = transformBeforeSave(next, edits) || next;
+    const payload = S.serialize(next, { properties, edition: edition || C.EDITION, now: now || new Date() });
     setConfig(payload, () => navigate(pluginListUrl(pathname, appId, true)));
   };
   cancelBtn.onclick = () => navigate(pluginListUrl(pathname, appId, false));

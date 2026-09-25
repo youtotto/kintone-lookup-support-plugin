@@ -320,7 +320,7 @@
         select.value = S.normalizeMode(value);
         return select;
       }
-      function buildCard(doc, lookup, item, readOnly) {
+      function buildCard(doc, lookup, item, readOnly, ctx = {}) {
         const card = el(doc, "div", "ls-card");
         card.dataset.code = lookup.code;
         card.appendChild(el(doc, "div", "ls-card-title", `${lookup.label}\uFF08${lookup.code}\uFF09`));
@@ -363,7 +363,12 @@
         updateWarning();
         fetch.appendChild(warning);
         card.appendChild(fetch);
-        if (readOnly) Array.from(card.querySelectorAll("input, select")).forEach((n) => {
+        (Array.isArray(ctx.extensions) ? ctx.extensions : []).forEach((ext) => {
+          if (!ext || typeof ext.buildSection !== "function") return;
+          const section = ext.buildSection(doc, { lookup, item, readOnly, properties: ctx.properties || null, config: ctx.config || null });
+          if (section) card.appendChild(section);
+        });
+        if (readOnly) Array.from(card.querySelectorAll("input, select, button")).forEach((n) => {
           n.disabled = true;
         });
         return card;
@@ -383,15 +388,22 @@
         card.appendChild(btn);
         return card;
       }
-      function collectEdits(root) {
-        return Array.from(root.querySelectorAll(".ls-card:not(.ls-card-orphan)")).map((card) => ({
-          lookupFieldCode: card.dataset.code,
-          subtableCode: null,
-          marker: { enabled: card.querySelector(".ls-marker-enabled").checked, color: card.querySelector(".ls-color").value },
-          autoFetch: { enabled: card.querySelector(".ls-fetch-enabled").checked, mode: card.querySelector(".ls-mode").value }
-        }));
+      function collectEdits(root, extensions = [], lookups = []) {
+        return Array.from(root.querySelectorAll(".ls-card:not(.ls-card-orphan)")).map((card) => {
+          const edit = {
+            lookupFieldCode: card.dataset.code,
+            subtableCode: null,
+            marker: { enabled: card.querySelector(".ls-marker-enabled").checked, color: card.querySelector(".ls-color").value },
+            autoFetch: { enabled: card.querySelector(".ls-fetch-enabled").checked, mode: card.querySelector(".ls-mode").value }
+          };
+          const lookup = lookups.find((l) => l.code === card.dataset.code) || null;
+          (Array.isArray(extensions) ? extensions : []).forEach((ext) => {
+            if (ext && typeof ext.collect === "function") ext.collect(card, edit, { lookup });
+          });
+          return edit;
+        });
       }
-      function renderConfigUi2({ document: doc, loaded, properties, setConfig, appId, pathname, navigate, now }) {
+      function renderConfigUi2({ document: doc, loaded, properties, setConfig, appId, pathname, navigate, now, extensions, transformBeforeSave, showUpsell, edition }) {
         const root = doc.querySelector(".ls-config");
         const notices = root.querySelector("#ls-notices");
         const cards = root.querySelector("#ls-cards");
@@ -428,7 +440,7 @@
         if (properties) {
           lookups.top.forEach((lookup) => {
             const item = S.findItem(config, lookup.code) || S.defaultItem(lookup.code);
-            cards.appendChild(buildCard(doc, lookup, S.normalizeItem(item), readOnly));
+            cards.appendChild(buildCard(doc, lookup, S.normalizeItem(item), readOnly, { extensions, properties, config }));
           });
           const formCodes = new Set(lookups.top.map((l) => l.code));
           (config.items || []).filter((it) => it && it.lookupFieldCode && !it.subtableCode && !formCodes.has(it.lookupFieldCode)).forEach((it) => {
@@ -437,16 +449,18 @@
           if (!lookups.top.length) cards.appendChild(el(doc, "p", "ls-empty", "\u3053\u306E\u30A2\u30D7\u30EA\u306B\u306F\u30EB\u30C3\u30AF\u30A2\u30C3\u30D7\u30D5\u30A3\u30FC\u30EB\u30C9\u304C\u3042\u308A\u307E\u305B\u3093\u3002"));
           if (lookups.subtable.length) subtableNotice.appendChild(el(doc, "p", "ls-subtable-notice", P.SUBTABLE_NOTICE(lookups.subtable.length)));
         }
-        upsell.appendChild(buildUpsell(doc));
+        if (showUpsell !== false) upsell.appendChild(buildUpsell(doc));
         saveBtn.disabled = readOnly;
         saveBtn.onclick = () => {
           if (readOnly) return;
-          let next = S.applyEdits(config, collectEdits(root));
+          const edits = collectEdits(root, extensions, lookups.top);
+          let next = S.applyEdits(config, edits);
           deleted.forEach((code) => {
             next = S.removeItem(next, code);
           });
           if (showPlusNotice) next.meta.noticedPlusAlways = true;
-          const payload = S.serialize(next, { properties, edition: C.EDITION, now: now || /* @__PURE__ */ new Date() });
+          if (typeof transformBeforeSave === "function") next = transformBeforeSave(next, edits) || next;
+          const payload = S.serialize(next, { properties, edition: edition || C.EDITION, now: now || /* @__PURE__ */ new Date() });
           setConfig(payload, () => navigate(pluginListUrl(pathname, appId, true)));
         };
         cancelBtn.onclick = () => navigate(pluginListUrl(pathname, appId, false));

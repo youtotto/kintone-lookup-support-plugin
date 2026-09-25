@@ -8,6 +8,11 @@
  *   whenCopyEmpty: キー非空 かつ コピー先フィールドが 1 件以上あり かつ すべて空 のときだけ取得（コピー先が無い場合は取得しない）
  *   always:        キー非空なら追加・編集とも取得（コピー先の有無を問わない）
  *   createOnly:    キー非空なら追加画面（コピー含む）でだけ取得（コピー先の有無を問わない）
+ *
+ * 拡張点（predicate）:
+ *   上の判定で「取得する」となった item についてだけ、任意の追加判定 predicate({ item, record, properties, screen }) を呼ぶ。
+ *   predicate が未指定なら判定は従来どおり。falsy を返せば取得しない（reason 'predicate-false'）。
+ *   例外を投げても取得しない（reason 'predicate-error'）。predicate の中身（条件の型・演算子）はこのモジュールでは扱わない。
  */
 const { copyTargetsOf } = require('./lookupFields');
 
@@ -19,12 +24,8 @@ function isEmptyValue(value) {
   return false;
 }
 
-/**
- * この item について取得を実行するか判定する。
- * @param {{ item: object, record: object, properties: object|null, screen: 'create'|'edit' }} p
- * @returns {{ fetch: boolean, reason: string }}
- */
-function decideFetch({ item, record, properties, screen }) {
+/** enabled / mode / キー / コピー先 だけで判定する（predicate を見ない） */
+function decideBase({ item, record, properties, screen }) {
   const auto = item && item.autoFetch;
   if (!auto || auto.enabled !== true) return { fetch: false, reason: 'disabled' };
   if (item.subtableCode) return { fetch: false, reason: 'subtable' }; /* 無料版 v1 は対象外 */
@@ -47,14 +48,32 @@ function decideFetch({ item, record, properties, screen }) {
 }
 
 /**
+ * この item について取得を実行するか判定する。
+ * @param {{ item: object, record: object, properties: object|null, screen: 'create'|'edit', predicate?: Function }} p
+ * @returns {{ fetch: boolean, reason: string, error?: Error }}
+ */
+function decideFetch({ item, record, properties, screen, predicate }) {
+  const base = decideBase({ item, record, properties, screen });
+  if (!base.fetch || typeof predicate !== 'function') return base;
+  let ok = false;
+  try {
+    ok = predicate({ item, record, properties, screen });
+  } catch (error) {
+    return { fetch: false, reason: 'predicate-error', error };
+  }
+  return ok ? base : { fetch: false, reason: 'predicate-false' };
+}
+
+/**
  * config の各 item を判定し、取得する item の record[code].lookup = true を設定する。
+ * @param {{ record: object, config: object, properties: object|null, screen: 'create'|'edit', predicate?: Function }} p
  * @returns {string[]} lookup を付けたフィールドコード
  */
-function applyAutoFetch({ record, config, properties, screen }) {
+function applyAutoFetch({ record, config, properties, screen, predicate }) {
   const fetched = [];
   if (!record || !config || !Array.isArray(config.items)) return fetched;
   config.items.forEach((item) => {
-    const decision = decideFetch({ item, record, properties, screen });
+    const decision = decideFetch({ item, record, properties, screen, predicate });
     if (!decision.fetch) return;
     record[item.lookupFieldCode].lookup = true;
     fetched.push(item.lookupFieldCode);
@@ -62,4 +81,4 @@ function applyAutoFetch({ record, config, properties, screen }) {
   return fetched;
 }
 
-module.exports = { isEmptyValue, decideFetch, applyAutoFetch };
+module.exports = { isEmptyValue, decideBase, decideFetch, applyAutoFetch };

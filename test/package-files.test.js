@@ -36,7 +36,7 @@ test('PK-2 manifest のアイコンは PNG で存在し、配布に必要なキ�
   assert.ok(w > 0 && h > 0 && w === h, `正方形 (${w}x${h})`);
   assert.equal(manifest.manifest_version, 1);
   assert.equal(manifest.type, 'APP');
-  assert.equal(manifest.version, '1.2.0', '正式版 v1.2.0');
+  assert.equal(manifest.version, '1.3.0', '正式版 v1.3.0（内部拡張のみ）');
   assert.equal(manifest.name.ja, 'ルックアップサポート');
   assert.equal(manifest.name.en, 'Lookup Support');
   assert.deepEqual(manifest.desktop.js, ['js/desktop.js']);
