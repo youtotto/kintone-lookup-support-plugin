@@ -1,5 +1,22 @@
 # ルックアップサポート（Lookup Support）
 
+## 公式リンク
+
+- [無料版の配布ページ](https://github.com/youtotto/kintone-lookup-support-plugin)
+- [紹介ページ](https://www.nestrec.com/post/kintone-free-plugins-renewal)
+
+## ダウンロードと導入
+
+[Releases](https://github.com/youtotto/kintone-lookup-support-plugin/releases/latest) から次のファイルをダウンロードします。
+
+| ファイル | 用途 |
+|---|---|
+| `lookup-support-1.3.0-free-bundle.zip` | 説明書付きの配布用 ZIP（おすすめ）。**ZIP を解凍し、中の `lookup-support-1.3.0-free-plugin.zip` を kintone へ読み込みます。bundle 自体は kintone に直接読み込みません** |
+| `lookup-support-1.3.0-free-plugin.zip` | kintone に直接読み込むプラグイン（bundle の中身と同じファイル） |
+| `SHA256SUMS.txt` | 上記 ZIP の SHA-256 |
+
+kintone への読み込みは、kintone システム管理 →「プラグイン」→「読み込む」で `lookup-support-1.3.0-free-plugin.zip` を ZIP のまま選びます。
+
 ルックアップフィールドの関係を見やすくし、基本的な自動取得まで行う無料の kintone プラグインです。
 
 - 🎨 PC のレコード詳細画面で、ルックアップフィールドとコピー先フィールドを同じ色で表示

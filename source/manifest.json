@@ -10,6 +10,10 @@
     "en": "Highlights lookup fields and their copy destinations in the same color, and fetches lookups automatically on the create/edit screens.",
     "ja": "ルックアップフィールドとコピー先を同じ色で見やすく表示し、追加・編集画面でルックアップを自動取得する無料プラグインです。"
   },
+  "homepage_url": {
+    "en": "https://www.nestrec.com/post/kintone-free-plugins-renewal",
+    "ja": "https://www.nestrec.com/post/kintone-free-plugins-renewal"
+  },
   "icon": "image/icon.png",
   "desktop": {
     "js": [
